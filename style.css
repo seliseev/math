@@ -140,7 +140,9 @@ input[type=range]:focus-visible{outline:3px solid var(--grape);outline-offset:6p
   font-weight:900;font-size:clamp(48px,13vw,92px);line-height:1;letter-spacing:-.03em;
   display:flex;align-items:center;justify-content:center;gap:clamp(10px,3vw,24px);
 }
-.op{color:var(--grape);font-weight:700}
+/* Знаки +, −, = в Rubik сидят на математической оси: их оптический центр
+   на ~.055em ниже центра цифр. Поднимаем, чтобы строка читалась ровной. */
+.op{color:var(--grape);font-weight:700;transform:translateY(-.055em)}
 .slot{
   min-width:clamp(62px,16vw,116px);
   border:3px dashed var(--edge);border-radius:18px;

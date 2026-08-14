@@ -18,9 +18,14 @@
     b.dataset.v = n;
     b.setAttribute('aria-label', 'Ответ ' + n);
     var dots = '';
-    for (var p = 0; p < (n === 0 ? 1 : n); p++) dots += p < 10 ? '<i></i>' : '<i class="ten"></i>';
+    for (var p = 0; p < (n === 0 ? 1 : n); p++){
+      dots += p < 10 ? '<i></i>' : (p < 20 ? '<i class="ten"></i>' : '<i class="twenty"></i>');
+    }
     b.innerHTML = '<span class="key-num">' + n + '</span>' +
                   '<span class="pips' + (n === 0 ? ' zero' : '') + '">' + dots + '</span>';
+    // колонка по единицам: 1, 11, 21 друг под другом, 10, 20, 30 в последней.
+    // Учитывается только в широкой раскладке (11 колонок), см. style.css
+    b.style.setProperty('--c', n === 0 ? 1 : ((n - 1) % 10) + 2);
     pad.appendChild(b);
   }
   var keys = Array.prototype.slice.call(pad.children);

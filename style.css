@@ -167,6 +167,7 @@ input[type=range]:focus-visible{outline:3px solid var(--grape);outline-offset:6p
 .pips{display:grid;grid-template-columns:repeat(5,5px);grid-auto-rows:5px;gap:3px;justify-content:center;min-height:13px}
 .pips i{width:5px;height:5px;border-radius:50%;background:#BDB0EE}
 .pips i.ten{background:#8E7BEA}
+.pips i.twenty{background:#6B5BE0}
 .pips.zero i{background:transparent;border:1.5px solid #CFC6EF}
 .key:hover:not(:disabled){transform:translateY(-2px);box-shadow:var(--lift-lg);border-color:#C9BEF2}
 .key:active:not(:disabled){transform:translateY(1px);box-shadow:none}
@@ -187,6 +188,12 @@ input[type=range]:focus-visible{outline:3px solid var(--grape);outline-offset:6p
 .done-line{font-weight:800;font-size:18px;margin:12px 0 4px}
 .done-sub{font-weight:700;color:var(--mute);margin:0 0 24px}
 #screen-done .ribbon{width:min(440px,100%);margin-bottom:26px}
+
+/* Широкая раскладка: 11 колонок, ряды выровнены по десяткам —
+   1/11/21 в одной колонке, 10/20/30 в последней (--c задаёт app.js) */
+@media (min-width:721px){
+  .key{grid-column-start:var(--c,auto)}
+}
 
 @media (max-width:720px){
   :root{--cols:6}

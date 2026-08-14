@@ -1,0 +1,67 @@
+name: Deploy to htmlkin.ru
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Параллельные деплои не нужны: htmlkin полностью заменяет сайт целиком,
+# поэтому гонка двух пушей может выложить более старую версию.
+concurrency:
+  group: htmlkin-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Собрать ZIP сайта
+        run: |
+          zip -r site.zip . \
+            -x '.git/*' '.github/*' '.gitignore' 'README.md' '*.zip'
+          unzip -l site.zip
+
+      - name: Обновить сайт на htmlkin.ru
+        env:
+          HTMLKIN_API_KEY: ${{ secrets.HTMLKIN_API_KEY }}
+          # id сайта math.htmlkin.ru — не секрет; переопределяется
+          # переменной репозитория HTMLKIN_PAGE_ID, если понадобится другой сайт
+          PAGE_ID: ${{ vars.HTMLKIN_PAGE_ID || '1706a80b7079' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HTMLKIN_API_KEY}" ]; then
+            echo "::error::Не задан секрет HTMLKIN_API_KEY (Settings → Secrets and variables → Actions → Secrets)"
+            exit 1
+          fi
+          if [ -z "${PAGE_ID}" ]; then
+            echo "::error::Не задана переменная HTMLKIN_PAGE_ID (Settings → Secrets and variables → Actions → Variables)"
+            exit 1
+          fi
+
+          code=$(curl -sS -o response.json -w '%{http_code}' \
+            -X PUT "https://htmlkin.ru/api/v1/pages/${PAGE_ID}" \
+            -H "Authorization: Bearer ${HTMLKIN_API_KEY}" \
+            -F "site_archive=@site.zip")
+
+          echo "HTTP ${code}"
+          cat response.json
+          echo
+
+          if [ "${code}" -lt 200 ] || [ "${code}" -ge 300 ]; then
+            echo "::error::htmlkin.ru вернул ${code}: $(jq -r '.message // .error // "неизвестная ошибка"' response.json)"
+            exit 1
+          fi
+
+          url=$(jq -r '.url' response.json)
+          files=$(jq -r '.file_count' response.json)
+          echo "Сайт обновлён: ${url} (файлов: ${files})"
+          {
+            echo "### Сайт обновлён"
+            echo ""
+            echo "- Адрес: ${url}"
+            echo "- Файлов: ${files}"
+            echo "- Коммит: \`${GITHUB_SHA}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

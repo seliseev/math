@@ -7,30 +7,83 @@
   /* верхняя граница счёта: задаётся страницей через <body data-limit="..."> */
   var LIMIT = +(document.body.dataset.limit || 10);
 
-  var state = { tasks: [], i: 0, right: 0, wrong: 0, locked: false, timer: null, sound: true };
+  var state = { tasks: [], i: 0, right: 0, wrong: 0, locked: false, timer: null, sound: true, entry: '' };
 
-  /* ---------- клавиатура ответов ---------- */
+  /* ---------- цифровая клавиатура ----------
+     Ровно как на телефоне: 1–9, ряд ⌫ 0 ✓. Ответ ребёнок набирает сам,
+     а не выбирает из готового ряда чисел — иначе клавиатура работает
+     как линейка, по которой ответ можно просто отсчитать. */
   var pad = el('pad');
-  for (var n = 0; n <= LIMIT; n++){
-    var b = document.createElement('button');
-    b.className = 'key';
-    b.type = 'button';
-    b.dataset.v = n;
-    b.setAttribute('aria-label', 'Ответ ' + n);
-    var dots = '';
-    for (var p = 0; p < (n === 0 ? 1 : n); p++){
-      dots += p < 10 ? '<i></i>' : (p < 20 ? '<i class="ten"></i>' : '<i class="twenty"></i>');
-    }
-    b.innerHTML = '<span class="key-num">' + n + '</span>' +
-                  '<span class="pips' + (n === 0 ? ' zero' : '') + '">' + dots + '</span>';
-    // колонка по единицам: 1, 11, 21 друг под другом, 10, 20, 30 в последней.
-    // Учитывается только в широкой раскладке (11 колонок), см. style.css
-    b.style.setProperty('--c', n === 0 ? 1 : ((n - 1) % 10) + 2);
-    pad.appendChild(b);
-  }
-  var keys = Array.prototype.slice.call(pad.children);
+  var MAXLEN = String(LIMIT).length;   // 10, 20, 30 → двузначные ответы
+  var digitKeys = [], okKey = null, delKey = null;
 
-  el('hint').textContent = 'Выбери ответ на клавиатуре внизу. Все ответы — от 0 до ' + LIMIT + '.';
+  [1,2,3,4,5,6,7,8,9,'del',0,'ok'].forEach(function(v){
+    var b = document.createElement('button');
+    b.type = 'button';
+    if (v === 'del'){
+      b.className = 'key key-fn key-del';
+      b.dataset.act = 'del';
+      b.setAttribute('aria-label', 'Стереть');
+      b.innerHTML = '<span class="key-glyph">⌫</span>';
+      delKey = b;
+    } else if (v === 'ok'){
+      b.className = 'key key-fn key-ok';
+      b.dataset.act = 'ok';
+      b.setAttribute('aria-label', 'Проверить ответ');
+      b.innerHTML = '<span class="key-glyph">✓</span>';
+      okKey = b;
+    } else {
+      b.className = 'key';
+      b.dataset.d = v;
+      b.setAttribute('aria-label', 'Цифра ' + v);
+      b.innerHTML = '<span class="key-num">' + v + '</span>';
+      digitKeys[v] = b;
+    }
+    pad.appendChild(b);
+  });
+
+  el('hint').textContent = 'Набери ответ цифрами и нажми ✓';
+
+  /* ---------- ввод ответа ---------- */
+  function syncPad(){
+    var empty = state.entry === '';
+    var full  = state.entry.length >= MAXLEN;
+    for (var d = 0; d <= 9; d++) digitKeys[d].disabled = state.locked || full;
+    delKey.disabled = state.locked || empty;
+    okKey.disabled  = state.locked || empty;
+  }
+
+  function setEntry(v){
+    state.entry = v;
+    var slot = el('slot');
+    slot.textContent = v === '' ? '?' : v;
+    slot.classList.toggle('typing', v !== '');
+    syncPad();
+  }
+
+  function pressDigit(d){
+    if (state.locked) return;
+    var e = state.entry === '0' ? '' : state.entry;   // без ведущего нуля
+    if (e.length >= MAXLEN) return;
+    setEntry(e + d);
+    beep([520], 'sine', 0.04);
+  }
+
+  function backspace(){
+    if (state.locked || state.entry === '') return;
+    setEntry(state.entry.slice(0, -1));
+  }
+
+  function submit(){
+    if (state.locked || state.entry === '') return;
+    answer(+state.entry);
+  }
+
+  function flash(node){
+    if (!node || node.disabled) return;
+    node.classList.add('is-hit');
+    setTimeout(function(){ node.classList.remove('is-hit'); }, 120);
+  }
 
   /* ---------- звук ---------- */
   var ctx = null;
@@ -100,9 +153,7 @@
     el('b').textContent = t.b;
     el('op').textContent = t.plus ? '+' : '−';
 
-    var slot = el('slot');
-    slot.textContent = '?';
-    slot.className = 'slot';
+    el('slot').className = 'slot';
 
     el('verdict').textContent = '';
     el('verdict').className = 'verdict';
@@ -111,14 +162,10 @@
     el('c-right').textContent = state.right;
     el('c-wrong').textContent = state.wrong;
 
-    keys.forEach(function(k){
-      k.disabled = false;
-      k.classList.remove('pick-right', 'pick-wrong', 'reveal');
-    });
-
     var marks = el('ribbon').children;
     for (var k = 0; k < marks.length; k++) marks[k].classList.toggle('now', k === state.i);
     state.locked = false;
+    setEntry('');
   }
 
   function answer(value){
@@ -126,12 +173,10 @@
     var t = state.tasks[state.i];
     var ok = value === t.ans;
     state.locked = true;
-
-    keys.forEach(function(k){ k.disabled = true; });
-    keys[value].classList.add(ok ? 'pick-right' : 'pick-wrong');
+    syncPad();
 
     var slot = el('slot');
-    slot.textContent = value;
+    slot.classList.remove('typing');
     slot.classList.add('filled', ok ? 'right' : 'wrong');
 
     var v = el('verdict');
@@ -149,7 +194,6 @@
       v.textContent = 'Правильный ответ: ' + t.ans;
       v.className = 'verdict wrong';
       mark.classList.add('bad');
-      keys[t.ans].classList.add('reveal');
       beep([180], 'square', 0.22);
     }
 
@@ -201,33 +245,27 @@
 
   pad.addEventListener('click', function(e){
     var k = e.target.closest('.key');
-    if (k && !k.disabled) answer(+k.dataset.v);
+    if (!k || k.disabled) return;
+    if (k.dataset.act === 'ok') submit();
+    else if (k.dataset.act === 'del') backspace();
+    else pressDigit(k.dataset.d);
   });
-
-  // цифры с клавиатуры; первая цифра двузначного ответа ждёт вторую 500 мс
-  var buf = null, bufTimer = null;
-  function dropBuf(){ clearTimeout(bufTimer); buf = null; }
 
   document.addEventListener('keydown', function(e){
     if (!screens.play.classList.contains('is-on')) return;
-    if (e.key === 'Escape'){ clearTimeout(state.timer); dropBuf(); show('start'); return; }
-    if (!/^[0-9]$/.test(e.key)) return;
-    var d = +e.key;
 
-    if (buf !== null){
-      var two = buf * 10 + d;
-      dropBuf();
-      if (two <= LIMIT){ answer(two); return; }
+    if (e.key === 'Escape'){ clearTimeout(state.timer); show('start'); return; }
+
+    // flash до действия: клавиша могла стать неактивной именно из-за него
+    if (/^[0-9]$/.test(e.key)){ flash(digitKeys[+e.key]); pressDigit(e.key); return; }
+
+    if (e.key === 'Backspace'){ e.preventDefault(); flash(delKey); backspace(); return; }
+
+    if (e.key === 'Enter' || e.key === ' '){
+      // не перехватываем Enter/пробел, если фокус на другой кнопке экрана
+      if (e.target.tagName === 'BUTTON' && !pad.contains(e.target)) return;
+      e.preventDefault();
+      flash(okKey); submit();
     }
-
-    if (d > 0 && d * 10 <= LIMIT){   // может быть началом двузначного ответа
-      buf = d;
-      bufTimer = setTimeout(function(){
-        if (buf === d){ buf = null; answer(d); }
-      }, 500);
-      return;
-    }
-
-    answer(d);
   });
 })();
